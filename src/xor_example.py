@@ -5,14 +5,12 @@
 - Need large batch size for quick learning
 - Missing these components leads to plateua at 0.5 reward (75% acc)
 """
-from tqdm import tqdm
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import pyjet.backend as J
 from smlp.discrete_layer import SigmoidSwitchboard
 from smlp.smlp import Switchboard
+from smlp.training import Trainer
 
 import matplotlib.pyplot as plt
 
@@ -51,40 +49,12 @@ X = rng.randn(1024, 2)
 Y = np.logical_xor(X[:, 0] > 0, X[:, 1] > 0).astype(np.uint8)
 xor_x = J.from_numpy(X).float()
 xor_y = J.from_numpy(Y).float().unsqueeze(1)
-# baseline settings
-
-
-@torch.no_grad()
-def train(x, y, network, optimizer, epochs=10000):
-    network = network.cuda()
-    baselines = J.zeros(len(x), 1) - 1.
-    alpha = 0.1
-
-    progbar = tqdm(range(epochs))
-    for i in progbar:
-        with torch.no_grad():
-            output = network(x)
-        # compute the reward & baselines
-        R = 2 * (y == output).float() - 1.
-        reward = R - baselines
-        baselines = (1 - alpha) * baselines + alpha * R
-
-        network.flip(reward)
-        optimizer.step()
-        optimizer.zero_grad()
-
-        # Stats
-        avg_reward = torch.mean(R).item()
-        progbar.set_postfix({"r": avg_reward})
-        # network.print_weights()
-        # print("Avg Reward:", torch.mean(reward).item())
-        # print()
 
 
 network = Net()
-# Weight decay is l2 loss
-optimizer = optim.SGD(network.parameters(), lr=1e-1, weight_decay=1e-5)
-train(xor_x, xor_y, network, optimizer)
+
+trainer = Trainer(xor_x, xor_y, network, lr=1e-1, weight_decay=1e-5)
+trainer.train(1000)
 
 # Plotting
 xx, yy = np.meshgrid(np.linspace(-3, 3, 100),

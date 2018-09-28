@@ -1,4 +1,4 @@
-import numpy as np
+ x 1import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -86,11 +86,11 @@ class SoftmaxSwitchboard(FullyConnectedSwitchboard):
 
     def sample(self, probas):
         # print(probas)
-        return torch.multinomial(probas, 1).squeeze(1)
+        return torch.multinomial(probas, 1)
 
     def calc_update(self, reward, batch_y):
         # reward is B x 1
-        # outputs is B
+        # outputs is B x 1
         # probas is B x k
         # inputs is B x n
         batch_size = len(reward)
