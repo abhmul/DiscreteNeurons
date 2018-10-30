@@ -12,13 +12,14 @@ def create_index_dataset(size):
 def get_batch(inds, *tensors):
     batches = [tensor[inds].cuda() if J.use_cuda else tensor[inds]
                for tensor in tensors]
-    return batches
+    inds = inds.cuda() if J.use_cuda else inds
+    return (inds, *batches)
 
 
 class SwitchboardTensorDataset(object):
 
     def __init__(self, X, Y):
-        self.X = torch.from_numpy(X)
+        self.X = torch.from_numpy(X).float()
         self.Y = torch.from_numpy(Y)
         self.num_samples = len(self.X)
 
@@ -44,24 +45,24 @@ class TrainingTensorDataset(SwitchboardTensorDataset):
         # Other params (keep these on the gpu)
         self.baselines = J.zeros(self.num_samples)
         self.priority_weights = J.ones(self.num_samples)
-        # Use a cpu copy of the weights
-        self.sampler = None
-        self.set_sampling_weights()
         # constants
         self.alpha = 0.1
         self.delta = 10
+        self.sampler = None
 
     def get_sampler(self):
-        return data.WeightedRandomSampler(
+        self.sampler = data.WeightedRandomSampler(
             torch.tensor(self.priority_weights.cpu()),
             self.num_samples
         )
+        return self.sampler
 
     def get_batch(self, inds):
-        return get_batch(inds, self.X, self.Y, self.baselines)
+        return get_batch(inds, self.X, self.Y, self.baselines,
+                         self.sampler.weights)
 
     def flow(self, batch_size):
-        data_loader = data.DataLoader(self._index_dataset,
+        data_loader = data.DataLoader(self.index_dataset,
                                       sampler=self.get_sampler(),
                                       batch_size=batch_size)
         return data_loader
@@ -72,8 +73,9 @@ class TrainingTensorDataset(SwitchboardTensorDataset):
         check_shape(batch_baselines, (batch_size,), name="Baselines")
 
         # Rewards are B
-        self.baselines[inds] = (1 - self.alpha) * batch_baselines + \
+        new_baselines = (1 - self.alpha) * batch_baselines + \
             self.alpha * rewards
+        self.baselines.index_copy_(0, inds, new_baselines)
 
     def update_weights(self, y_true, probas, inds):
         batch_size = len(inds)
@@ -82,7 +84,9 @@ class TrainingTensorDataset(SwitchboardTensorDataset):
 
         max_p = torch.max(probas, dim=1)[0]
         min_p = torch.min(probas, dim=1)[0]
-        correct_p = probas.gather(1, y_true.unsqueeze(-1))
-        self.priority_weights[inds] = ((1 - 1 / self.delta)
-                                       * (correct_p - max_p) / (min_p - max_p)
-                                       + 1 / self.delta) ** -1
+        correct_p = probas.gather(1, y_true.unsqueeze(-1)).squeeze(-1)
+        # print(self.priority_weights[inds])
+        new_weights = ((1 - 1 / self.delta)
+                       * (correct_p - max_p) / (min_p - max_p)
+                       + 1 / self.delta) ** -1
+        self.priority_weights.index_copy_(0, inds, new_weights)

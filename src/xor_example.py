@@ -24,7 +24,7 @@ class Net(Switchboard):
         self.outputs_size = 1
 
         self.fc1 = SigmoidSwitchboard(
-            self.input_size, self.hidden_size, init=0.7)
+            self.input_size, self.hidden_size)
         self.fc2 = SigmoidSwitchboard(self.hidden_size, self.outputs_size)
 
         self.post_init()
@@ -45,16 +45,13 @@ class Net(Switchboard):
 
 
 rng = np.random.RandomState(0)
-X = rng.randn(1024, 2)
-Y = np.logical_xor(X[:, 0] > 0, X[:, 1] > 0).astype(np.uint8)
-xor_x = J.from_numpy(X).float()
-xor_y = J.from_numpy(Y).float().unsqueeze(1)
-
+X = rng.randn(1024, 2).astype(np.float32)
+Y = np.logical_xor(X[:, 0] > 0, X[:, 1] > 0).astype(int)
 
 network = Net()
 
-trainer = Trainer(xor_x, xor_y, network, lr=1e-1, weight_decay=1e-5)
-trainer.train(1000)
+trainer = Trainer(X, Y, network, lr=1.0, weight_decay=1e-5)
+trainer.train(10000)
 
 # Plotting
 xx, yy = np.meshgrid(np.linspace(-3, 3, 100),

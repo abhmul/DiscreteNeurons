@@ -33,3 +33,6 @@ class Switchboard(nn.Module):
             raise AttributeError("No submodules (did you call post_init)?")
         for module in self.switchboard_modules:
             module.flip(reward, batch_y=batch_y)
+
+    def post_ep_hook(self):
+        [module.post_ep_hook() for module in self.switchboard_modules]
